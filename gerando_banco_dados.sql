@@ -307,7 +307,7 @@ DECLARE
     randomStatus VARCHAR(255);
     randomImpacto VARCHAR(255);
     randomPrioridade VARCHAR(255);
-    fimRealCount INT := 0;
+    concluidoCount INT := 0;
 BEGIN
     LOOP
         EXIT WHEN i > 1000;
@@ -330,26 +330,25 @@ BEGIN
             randomDataFimPrevista := DATE '2025-12-31';
         END IF;
 
-        IF fimRealCount < 500 AND RANDOM() < 0.55 THEN
+        -- Status e Data_fim_real decididos juntos
+        IF concluidoCount < 400 AND (RANDOM() < 0.45 OR i > 1000 - (400 - concluidoCount)) THEN
+            randomStatus := 'Concluído';
+            concluidoCount := concluidoCount + 1;
             randomDataFimReal := randomDataInicio + (1 + FLOOR(RANDOM() * (DATE '2025-12-31' - randomDataInicio)))::INT;
             IF randomDataFimReal > DATE '2025-12-31' THEN
-                randomDataFimReal := NULL;
-            ELSE
-                fimRealCount := fimRealCount + 1;
+                randomDataFimReal := DATE '2025-12-31';
             END IF;
         ELSE
+            randomStatus := CASE FLOOR(RANDOM() * 6)
+                WHEN 0 THEN 'Planejado'
+                WHEN 1 THEN 'Em andamento'
+                WHEN 2 THEN 'Em risco'
+                WHEN 3 THEN 'Atrasado'
+                WHEN 4 THEN 'Cancelado'
+                ELSE 'Pausado'
+            END;
             randomDataFimReal := NULL;
         END IF;
-
-        randomStatus := CASE FLOOR(RANDOM() * 7)
-            WHEN 0 THEN 'Planejado'
-            WHEN 1 THEN 'Em andamento'
-            WHEN 2 THEN 'Em risco'
-            WHEN 3 THEN 'Atrasado'
-            WHEN 4 THEN 'Concluído'
-            WHEN 5 THEN 'Cancelado'
-            ELSE 'Pausado'
-        END;
 
         randomImpacto := CASE FLOOR(RANDOM() * 4)
             WHEN 0 THEN 'Financeiro'
@@ -373,6 +372,14 @@ BEGIN
     END LOOP;
 END;
 $$;
+
+-- Limpando a tabela projetos_melhoria para rodar o ajuste da regra de negócio
+
+TRUNCATE TABLE customer_experience.projetos_melhoria RESTART IDENTITY CASCADE;
+
+-- Chamando a procedure novamente 
+
+CALL customer_experience.inserir_dados_projetos_melhoria();
 
 
 -- Executar todas as procedures

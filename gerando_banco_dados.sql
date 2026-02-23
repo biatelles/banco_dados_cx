@@ -73,7 +73,7 @@ DECLARE
     randomMRR NUMERIC(10, 2);
     randomStatus VARCHAR(255);
     randomDataCancelamento DATE;
-    cancelamentoCount INT := 0;
+    desligadoCount INT := 0;
 BEGIN
     LOOP
         EXIT WHEN i > 1000;
@@ -94,16 +94,16 @@ BEGIN
 
         randomMRR := ROUND((1000 + RANDOM() * 99000)::numeric, 2);
 
-        randomStatus := CASE WHEN RANDOM() < 0.7 THEN 'Ativo' ELSE 'Desligado' END;
-
-        IF cancelamentoCount < 300 AND RANDOM() < 0.35 THEN
+        -- Status: exatamente 300 'Desligado', restante 'Ativo'
+        IF desligadoCount < 300 AND (RANDOM() < 0.35 OR i > 1000 - (300 - desligadoCount)) THEN
+            randomStatus := 'Desligado';
+            desligadoCount := desligadoCount + 1;
             randomDataCancelamento := randomDataEntrada + (1 + FLOOR(RANDOM() * (DATE '2025-12-31' - randomDataEntrada)))::INT;
             IF randomDataCancelamento > DATE '2025-12-31' THEN
-                randomDataCancelamento := NULL;
-            ELSE
-                cancelamentoCount := cancelamentoCount + 1;
+                randomDataCancelamento := DATE '2025-12-31';
             END IF;
         ELSE
+            randomStatus := 'Ativo';
             randomDataCancelamento := NULL;
         END IF;
 
@@ -117,6 +117,13 @@ BEGIN
 END;
 $$;
 
+-- Limpando a tabela clientes para rodar o ajuste da regra de negócio
+
+TRUNCATE TABLE customer_experience.clientes RESTART IDENTITY CASCADE;
+
+-- Chamando a procedure novamente 
+
+CALL customer_experience.inserir_dados_clientes();
 
 -- Stored Procedure: expansao
 CREATE OR REPLACE PROCEDURE customer_experience.inserir_dados_expansao()

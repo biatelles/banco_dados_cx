@@ -1,4 +1,3 @@
--- Criando schema
 CREATE SCHEMA customer_experience AUTHORIZATION dsa;
 
 -- Criando tabela clientes
@@ -13,18 +12,17 @@ CREATE TABLE customer_experience.clientes (
 );
 
 -- Criando tabela expansao
-
 CREATE TABLE customer_experience.expansao (
     ID_oportunidade SERIAL,
     ID_cliente INT NOT NULL,
     Data_criacao DATE NOT NULL,
     Data_fechamento DATE,
     Etapa VARCHAR(255) NOT NULL,
-    Valor NUMERIC(10, 2) NOT NULL
+    Valor NUMERIC(10, 2) NOT NULL,
+    Responsavel VARCHAR(255) NOT NULL
 );
 
 -- Criando tabela tickets
-
 CREATE TABLE customer_experience.tickets (
     ID_ticket SERIAL,
     ID_cliente INT NOT NULL,
@@ -33,11 +31,11 @@ CREATE TABLE customer_experience.tickets (
     Data_fechamento DATE,
     Categoria VARCHAR(255) NOT NULL,
     NPS NUMERIC(2,0),
-    Resolvido_na_primeira_resposta BOOLEAN
+    Resolvido_na_primeira_resposta BOOLEAN,
+    Responsavel VARCHAR(255) NOT NULL
 );
 
 -- Criando tabela de interações com a equipe de CS
-
 CREATE TABLE customer_experience.interacoes_cs (
     ID_interacao SERIAL,
     ID_cliente INT NOT NULL,
@@ -47,7 +45,6 @@ CREATE TABLE customer_experience.interacoes_cs (
 );
 
 -- Criando tabela de projetos de melhoria
-
 CREATE TABLE customer_experience.projetos_melhoria (
     ID_projeto SERIAL,
     Area VARCHAR(255) NOT NULL,
@@ -58,8 +55,6 @@ CREATE TABLE customer_experience.projetos_melhoria (
     Impacto_esperado VARCHAR(255),
     Prioridade VARCHAR(255)
 );
-
--- Fazendo a carga de dados:
 
 -- Stored Procedure: clientes
 CREATE OR REPLACE PROCEDURE customer_experience.inserir_dados_clientes()
@@ -94,7 +89,6 @@ BEGIN
 
         randomMRR := ROUND((1000 + RANDOM() * 99000)::numeric, 2);
 
-        -- Status: exatamente 300 'Desligado', restante 'Ativo'
         IF desligadoCount < 300 AND (RANDOM() < 0.35 OR i > 1000 - (300 - desligadoCount)) THEN
             randomStatus := 'Desligado';
             desligadoCount := desligadoCount + 1;
@@ -117,14 +111,6 @@ BEGIN
 END;
 $$;
 
--- Limpando a tabela clientes para rodar o ajuste da regra de negócio
-
-TRUNCATE TABLE customer_experience.clientes RESTART IDENTITY CASCADE;
-
--- Chamando a procedure novamente 
-
-CALL customer_experience.inserir_dados_clientes();
-
 -- Stored Procedure: expansao
 CREATE OR REPLACE PROCEDURE customer_experience.inserir_dados_expansao()
 LANGUAGE plpgsql
@@ -136,6 +122,7 @@ DECLARE
     randomDataFechamento DATE;
     randomEtapa VARCHAR(255);
     randomValor NUMERIC(10, 2);
+    randomResponsavel VARCHAR(255);
     maxClienteID INT;
 BEGIN
     SELECT MAX(ID) INTO maxClienteID FROM customer_experience.clientes;
@@ -165,18 +152,28 @@ BEGIN
             ELSE 'Fechado perdido'
         END;
 
+        randomResponsavel := CASE FLOOR(RANDOM() * 8)
+            WHEN 0 THEN 'Maria'
+            WHEN 1 THEN 'João'
+            WHEN 2 THEN 'Joana'
+            WHEN 3 THEN 'Carla'
+            WHEN 4 THEN 'Matheus'
+            WHEN 5 THEN 'Flávia'
+            WHEN 6 THEN 'Marcos'
+            ELSE 'Ana'
+        END;
+
         randomValor := ROUND((300 + RANDOM() * 1700)::numeric, 2);
 
         INSERT INTO customer_experience.expansao
-            (ID_cliente, Data_criacao, Data_fechamento, Etapa, Valor)
+            (ID_cliente, Data_criacao, Data_fechamento, Etapa, Valor, Responsavel)
         VALUES
-            (randomIDCliente, randomDataCriacao, randomDataFechamento, randomEtapa, randomValor);
+            (randomIDCliente, randomDataCriacao, randomDataFechamento, randomEtapa, randomValor, randomResponsavel);
 
         i := i + 1;
     END LOOP;
 END;
 $$;
-
 
 -- Stored Procedure: tickets
 CREATE OR REPLACE PROCEDURE customer_experience.inserir_dados_tickets()
@@ -191,6 +188,7 @@ DECLARE
     randomCategoria VARCHAR(255);
     randomNPS NUMERIC(2, 0);
     randomResolvido BOOLEAN;
+    randomResponsavel VARCHAR(255);
     fechamentoCount INT := 0;
     maxClienteID INT;
 BEGIN
@@ -234,16 +232,26 @@ BEGIN
             ELSE 'Falha em relatório/exportação'
         END;
 
+        randomResponsavel := CASE FLOOR(RANDOM() * 8)
+            WHEN 0 THEN 'Maria'
+            WHEN 1 THEN 'João'
+            WHEN 2 THEN 'Joana'
+            WHEN 3 THEN 'Carla'
+            WHEN 4 THEN 'Matheus'
+            WHEN 5 THEN 'Flávia'
+            WHEN 6 THEN 'Marcos'
+            ELSE 'Ana'
+        END;
+
         INSERT INTO customer_experience.tickets
-            (ID_cliente, Data_abertura, Data_primeira_resposta, Data_fechamento, Categoria, NPS, Resolvido_na_primeira_resposta)
+            (ID_cliente, Data_abertura, Data_primeira_resposta, Data_fechamento, Categoria, NPS, Resolvido_na_primeira_resposta, Responsavel)
         VALUES
-            (randomIDCliente, randomDataAbertura, randomDataPrimeiraResposta, randomDataFechamento, randomCategoria, randomNPS, randomResolvido);
+            (randomIDCliente, randomDataAbertura, randomDataPrimeiraResposta, randomDataFechamento, randomCategoria, randomNPS, randomResolvido, randomResponsavel);
 
         i := i + 1;
     END LOOP;
 END;
 $$;
-
 
 -- Stored Procedure: interacoes_cs
 CREATE OR REPLACE PROCEDURE customer_experience.inserir_dados_interacoes_cs()
@@ -293,7 +301,6 @@ BEGIN
 END;
 $$;
 
-
 -- Stored Procedure: projetos_melhoria
 CREATE OR REPLACE PROCEDURE customer_experience.inserir_dados_projetos_melhoria()
 LANGUAGE plpgsql
@@ -330,7 +337,6 @@ BEGIN
             randomDataFimPrevista := DATE '2025-12-31';
         END IF;
 
-        -- Status e Data_fim_real decididos juntos
         IF concluidoCount < 400 AND (RANDOM() < 0.45 OR i > 1000 - (400 - concluidoCount)) THEN
             randomStatus := 'Concluído';
             concluidoCount := concluidoCount + 1;
@@ -373,14 +379,32 @@ BEGIN
 END;
 $$;
 
--- Limpando a tabela projetos_melhoria para rodar o ajuste da regra de negócio
+-- Dropando as tabelas que precisam ser recriadas com a nova estrutura
+DROP TABLE IF EXISTS customer_experience.expansao CASCADE;
+DROP TABLE IF EXISTS customer_experience.tickets CASCADE;
 
-TRUNCATE TABLE customer_experience.projetos_melhoria RESTART IDENTITY CASCADE;
+-- Recriando as tabelas com a estrutura correta
+CREATE TABLE customer_experience.expansao (
+    ID_oportunidade SERIAL,
+    ID_cliente INT NOT NULL,
+    Data_criacao DATE NOT NULL,
+    Data_fechamento DATE,
+    Etapa VARCHAR(255) NOT NULL,
+    Valor NUMERIC(10, 2) NOT NULL,
+    Responsavel VARCHAR(255) NOT NULL
+);
 
--- Chamando a procedure novamente 
-
-CALL customer_experience.inserir_dados_projetos_melhoria();
-
+CREATE TABLE customer_experience.tickets (
+    ID_ticket SERIAL,
+    ID_cliente INT NOT NULL,
+    Data_abertura DATE NOT NULL,
+    Data_primeira_resposta DATE,
+    Data_fechamento DATE,
+    Categoria VARCHAR(255) NOT NULL,
+    NPS NUMERIC(2,0),
+    Resolvido_na_primeira_resposta BOOLEAN,
+    Responsavel VARCHAR(255) NOT NULL
+);
 
 -- Executar todas as procedures
 CALL customer_experience.inserir_dados_clientes();
@@ -388,7 +412,6 @@ CALL customer_experience.inserir_dados_expansao();
 CALL customer_experience.inserir_dados_tickets();
 CALL customer_experience.inserir_dados_interacoes_cs();
 CALL customer_experience.inserir_dados_projetos_melhoria();
-
 
 -- Verificar os dados
 SELECT * FROM customer_experience.clientes;

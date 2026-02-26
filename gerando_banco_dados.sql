@@ -419,3 +419,153 @@ SELECT * FROM customer_experience.expansao;
 SELECT * FROM customer_experience.tickets LIMIT 100;
 SELECT * FROM customer_experience.interacoes_cs;
 SELECT * FROM customer_experience.projetos_melhoria;
+
+-- Dropando e recriando a tabela expansao com nova estrutura
+DROP TABLE IF EXISTS customer_experience.expansao CASCADE;
+
+CREATE TABLE customer_experience.expansao (
+    ID_oportunidade SERIAL,
+    ID_cliente INT NOT NULL,
+    Etapa VARCHAR(255) NOT NULL,
+    Valor NUMERIC(10, 2) NOT NULL,
+    Responsavel VARCHAR(255) NOT NULL,
+    Meta_tx_conversao NUMERIC(4, 2) NOT NULL,
+    Data_identificado DATE,
+    Data_qualificado DATE,
+    Data_enviado DATE,
+    Data_negociado DATE,
+    Data_fechado_ganho DATE,
+    Data_fechado_perdido DATE
+);
+
+CREATE OR REPLACE PROCEDURE customer_experience.inserir_dados_expansao()
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    randomIDCliente INT;
+    randomValor NUMERIC(10, 2);
+    randomResponsavel VARCHAR(255);
+    randomMetaTx NUMERIC(4, 2);
+    maxClienteID INT;
+
+    d_identificado    DATE;
+    d_qualificado     DATE;
+    d_enviado         DATE;
+    d_negociado       DATE;
+    d_fechado_ganho   DATE;
+    d_fechado_perdido DATE;
+
+    baseDate DATE;
+
+    -- Definição exata dos lotes por etapa
+    etapa_atual   VARCHAR(255);
+    etapa_limite  INT;
+    etapa_idx     INT;
+    reg_count     INT;
+
+BEGIN
+    SELECT MAX(ID) INTO maxClienteID FROM customer_experience.clientes;
+
+    -- Loop por cada etapa com seu volume exato
+    FOR etapa_idx IN 1..6 LOOP
+
+        etapa_atual := CASE etapa_idx
+            WHEN 1 THEN 'Identificada'
+            WHEN 2 THEN 'Qualificada'
+            WHEN 3 THEN 'Proposta enviada'
+            WHEN 4 THEN 'Negociação'
+            WHEN 5 THEN 'Fechado ganho'
+            WHEN 6 THEN 'Fechado perdido'
+        END;
+
+        etapa_limite := CASE etapa_idx
+            WHEN 1 THEN 1000   -- Identificada
+            WHEN 2 THEN 800    -- Qualificada
+            WHEN 3 THEN 600    -- Proposta enviada
+            WHEN 4 THEN 500    -- Negociação
+            WHEN 5 THEN 480    -- Fechado ganho
+            WHEN 6 THEN 20     -- Fechado perdido (480 + 20 = 500 = Negociação)
+        END;
+
+        reg_count := 1;
+        LOOP
+            EXIT WHEN reg_count > etapa_limite;
+
+            randomIDCliente := 1 + FLOOR(RANDOM() * maxClienteID)::INT;
+
+            -- Data base aleatória dentro do período
+            baseDate := DATE '2022-01-01' + (FLOOR(RANDOM() * (DATE '2025-06-01' - DATE '2022-01-01')))::INT;
+
+            -- Resetar datas
+            d_identificado    := NULL;
+            d_qualificado     := NULL;
+            d_enviado         := NULL;
+            d_negociado       := NULL;
+            d_fechado_ganho   := NULL;
+            d_fechado_perdido := NULL;
+
+            -- Preencher datas sequencialmente até a etapa atual
+            d_identificado := baseDate;
+
+            IF etapa_idx >= 2 THEN
+                d_qualificado := d_identificado + (3 + FLOOR(RANDOM() * 15))::INT;
+            END IF;
+
+            IF etapa_idx >= 3 THEN
+                d_enviado := d_qualificado + (3 + FLOOR(RANDOM() * 15))::INT;
+            END IF;
+
+            IF etapa_idx >= 4 THEN
+                d_negociado := d_enviado + (3 + FLOOR(RANDOM() * 15))::INT;
+            END IF;
+
+            IF etapa_idx = 5 THEN
+                d_fechado_ganho := d_negociado + (3 + FLOOR(RANDOM() * 15))::INT;
+            END IF;
+
+            IF etapa_idx = 6 THEN
+                d_fechado_perdido := d_negociado + (3 + FLOOR(RANDOM() * 15))::INT;
+            END IF;
+
+            -- Garantir que datas não ultrapassem 2025-12-31
+            IF d_qualificado     > DATE '2025-12-31' THEN d_qualificado     := DATE '2025-12-31'; END IF;
+            IF d_enviado         > DATE '2025-12-31' THEN d_enviado         := DATE '2025-12-31'; END IF;
+            IF d_negociado       > DATE '2025-12-31' THEN d_negociado       := DATE '2025-12-31'; END IF;
+            IF d_fechado_ganho   > DATE '2025-12-31' THEN d_fechado_ganho   := DATE '2025-12-31'; END IF;
+            IF d_fechado_perdido > DATE '2025-12-31' THEN d_fechado_perdido := DATE '2025-12-31'; END IF;
+
+            -- Meta taxa de conversão: entre 40 e 55
+            randomMetaTx := ROUND((40 + RANDOM() * 15)::numeric, 2);
+
+            randomResponsavel := CASE FLOOR(RANDOM() * 8)
+                WHEN 0 THEN 'Maria'
+                WHEN 1 THEN 'João'
+                WHEN 2 THEN 'Joana'
+                WHEN 3 THEN 'Carla'
+                WHEN 4 THEN 'Matheus'
+                WHEN 5 THEN 'Flávia'
+                WHEN 6 THEN 'Marcos'
+                ELSE 'Ana'
+            END;
+
+            randomValor := ROUND((300 + RANDOM() * 1700)::numeric, 2);
+
+            INSERT INTO customer_experience.expansao
+                (ID_cliente, Etapa, Valor, Responsavel, Meta_tx_conversao,
+                 Data_identificado, Data_qualificado, Data_enviado,
+                 Data_negociado, Data_fechado_ganho, Data_fechado_perdido)
+            VALUES
+                (randomIDCliente, etapa_atual, randomValor, randomResponsavel, randomMetaTx,
+                 d_identificado, d_qualificado, d_enviado,
+                 d_negociado, d_fechado_ganho, d_fechado_perdido);
+
+            reg_count := reg_count + 1;
+        END LOOP;
+    END LOOP;
+END;
+$$;
+
+-- Limpar e executar
+TRUNCATE TABLE customer_experience.expansao;
+CALL customer_experience.inserir_dados_expansao();
+
